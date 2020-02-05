@@ -15,11 +15,15 @@ class BrowserContent {
     return this;
   }
 
+  init () {
+    console.log('[BROWSER:CONTENT]', 'init()');
+  }
+
   _getInnerHTML () {
     let html = ``;
     html += `<div class="ui segment loading">`;
     html += `<h1 class="header">Preparing content...</h1>`;
-    html += `<p>The application is compiling your document.  Unless you've enabled JavaScript or are using the Fabric Browser, this message should not remain visible for long.</p>`;
+    html += `<p>The application is compiling your document.</p>`;
     html += `</div>`;
     return html;
   }

@@ -46,6 +46,43 @@ class Component extends Service {
     return `sha256-${hash}`;
   }
 
+
+  attributeChangedCallback (name, old, value) {
+    console.log('[MAKI:COMPONENT]', 'Component notified a change:', name, 'changed to:', value, `(was ${old})`);
+  }
+
+  connectedCallback () {
+    console.log('[MAKI:COMPONENT]', 'Component added to page:', this);
+    let html = this._getInnerHTML();
+
+    this.setAttribute('data-integrity', Fabric.sha256(html));
+    this.setAttribute('data-fingerprint', this.fingerprint);
+    // this.innerHTML = html;
+    this.innerHTML = html + '';
+
+    /* let binding = this.getAttribute('data-bind');
+
+    if (binding) {
+      // TODO: use Fabric.Remote
+      fetch(`fabric:${binding}`)
+        .then((response) => response.text())
+        .then((responseText) => {
+          this.render(JSON.parse(responseText));
+        })
+        .catch((error) => {
+          console.error(error);
+        });
+    } */
+
+    // Reflect.construct(HTMLElement, [], this.constructor);
+    return this;
+  }
+
+  disconnectedCallback () {
+    console.log('[MAKI:COMPONENT]', 'Component removed from page:', this);
+    // TODO: remove event listeners, close connections, etc.
+  }
+
   _bind (element) {
     if (this.element) {
       // TODO: unbind old handlers
@@ -97,7 +134,9 @@ class Component extends Service {
   }
 
   render () {
-    this.element.innerHTML = this._getInnerHTML();
+    if (this.element) {
+      this.element.innerHTML = this._getInnerHTML();
+    }
     return this._renderState(this.state);
   }
 }

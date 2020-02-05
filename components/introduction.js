@@ -1,10 +1,11 @@
 'use strict';
 
 // const Component = require('./component');
+const Component = require('../types/component');
 
-class Introduction {
+class Introduction extends Component {
   constructor (settings = {}) {
-    // super(settings);
+    super(settings);
 
     this.settings = Object.assign({
       title: 'Introduction to Maki, a cross-platform UI designer',

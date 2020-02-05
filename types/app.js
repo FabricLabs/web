@@ -74,6 +74,7 @@ class App extends Component {
     this.router = new Router(this.settings);
     // this.wallet = new Wallet();
     this.browser = new Browser(Object.assign({}, this.settings, {
+      component: 'fabric-welcome',
       path: './stores/fabric-browser'
     }));
 
@@ -109,13 +110,12 @@ class App extends Component {
       }
     });
 
-    this.handler = page;
     this.circuit = this.settings.circuit || new Fabric.Circuit();
 
     // Add index menu item
     // this.menu._addItem({ name: this.settings.name, path: '/', brand: true });
     this.router._addRoute('/', this.settings.components.index);
-    this.handler('/', this._loadIndex.bind(this));
+    this.handler('/', this._handleNavigation.bind(this));
 
     // properties
     this.identities = {};
@@ -148,6 +148,7 @@ class App extends Component {
     // Some default Components, available to all
     // TODO: expose this as the Library, namespace `alexandria`
     this.define('Introduction', Introduction);
+    this._defineElement('maki-introduction', Introduction);
 
     this.route = '/';
     this.status = 'ready';
@@ -155,7 +156,12 @@ class App extends Component {
     return this;
   }
 
+  get handler () {
+    return page;
+  }
+
   get page () {
+    // TODO: return current page
     return new Resource({
       name: 'BlankPage'
     });
@@ -247,6 +253,7 @@ class App extends Component {
 
   async _loadIndex (ctx) {
     let Index = this.components[this.settings.components.index];
+    if (!Index) throw new Error(`Could not find component: ${this.settings.components.index}`);
     let resource = new Index(this.state);
     let content = resource.render();
     this._setTitle(resource.name);
@@ -408,28 +415,40 @@ class App extends Component {
     let blob = JSON.stringify(this.state, null, '  ');
     let verification = crypto.createHash('sha256').update(blob).digest('hex');
     let content = ``;
-    content += `<fabric-application route="${this.route}" integrity="${this.integrity}" class="window">
-  <header>
-    <fabric-grid-row id="details" class="ui grid">
-      <div class="wide column">
-        <div class="ui inverted header">
-          <a href="/"><img src="/images/brand.png" class="ui small image" /></a>
-          <h1 class="content"><a href="/">${this.settings.name}</a></h1>
-          <p class="sub header">${this.settings.synopsis}</p>
-        </div>
-      </div>
-    </fabric-grid-row>
-  </header>
-  <fabric-grid-row id="browser">${this.browser.render()}</fabric-grid-row>
-  <footer>
-    <fabric-debug></fabric-debug>
-  </footer>
-  <div id="ephemeral-content"></div>
-  <!-- TODO: rollup semantic into build process -->
-  <!-- <script type="text/javascript" src="/scripts/semantic.min.js"></script> -->
-  <!-- <script type="text/javascript" src="/scripts/index.min.js"></script> -->
-  <script type="text/javascript" src="/scripts/rpg.min.js"></script>
-</fabric-application>`;
+
+    // Begin Content Body
+    content += `<fabric-application route="${this.route}" integrity="${this.integrity}" class="window">`;
+
+    if (this.settings.header) {
+      content += `<header>
+        <fabric-grid-row id="details" class="ui grid">
+          <div class="wide column">
+            <div class="ui inverted header">
+              <a href="/"><img src="/images/brand.png" class="ui small image" /></a>
+              <h1 class="content"><a href="/">${this.settings.name}</a></h1>
+              <p class="sub header">${this.settings.synopsis}</p>
+            </div>
+          </div>
+        </fabric-grid-row>
+      </header>`;
+    }
+
+    // Main Browser Viewport
+    content += `<fabric-grid-row id="browser">${this.browser.render()}</fabric-grid-row>`;
+
+    if (this.settings.footer) {
+      content += `<footer>
+        <fabric-debug></fabric-debug>
+      </footer>`;
+    }
+
+    content += `<div id="ephemeral-content"></div>
+      <!-- TODO: rollup semantic into build process -->
+      <!-- <script type="text/javascript" src="/scripts/semantic.min.js"></script> -->
+      <!-- <script type="text/javascript" src="/scripts/index.min.js"></script> -->
+      <!-- <script type="text/javascript" src="/scripts/rpg.min.js"></script> -->
+      <script type="text/javascript" src="/scripts/app.js"></script>
+    </fabric-application>`;
     return content;
   }
 

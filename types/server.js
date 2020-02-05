@@ -13,12 +13,20 @@ const http = require('http');
 // NOTE: current blockers include PeerServer...
 const express = require('express');
 const session = require('express-session');
+// TODO: check with Riddle about this
 const parsers = require('body-parser');
+const extractor = require('express-bearer-token');
 const pluralize = require('pluralize');
 const stoppable = require('stoppable');
 
+// Pathing
+const pathToRegexp = require('path-to-regexp').pathToRegexp;
+
 // Core components
-const Fabric = require('@fabric/core');
+const Oracle = require('@fabric/core/types/oracle');
+const Collection = require('@fabric/core/types/collection');
+const Resource = require('@fabric/core/types/resource');
+const State = require('@fabric/core/types/state');
 // const App = require('./app');
 // const Client = require('./client');
 // const Component = require('./component');
@@ -32,7 +40,7 @@ const PeerServer = require('peer').ExpressPeerServer;
  * The primary web server.
  * @extends Oracle
  */
-class HTTPServer extends Fabric.Oracle {
+class HTTPServer extends Oracle {
   /**
    * Create an instance of the HTTP server.
    * @param  {Object} [settings={}] Configuration values.
@@ -56,6 +64,7 @@ class HTTPServer extends Fabric.Oracle {
 
     this.connections = {};
     this.definitions = {};
+    this.stores = {};
 
     this.app = new SPA(Object.assign({}, this.settings, {
       path: './stores/server-application'
@@ -79,6 +88,7 @@ class HTTPServer extends Fabric.Oracle {
     });
 
     this.collections = [];
+    this.routes = [];
     this.customRoutes = [];
 
     return this;
@@ -91,14 +101,31 @@ class HTTPServer extends Fabric.Oracle {
    * @return {HTTPServer}            Instance of the configured server.
    */
   async define (name, definition) {
+    if (this.settings.verbosity >= 4) console.log('[WEB:SERVER]', 'Defining:', name, definition);
+
+    let store = new Collection(definition);
     let resource = await super.define(name, definition);
     let snapshot = Object.assign({
       names: { plural: pluralize(name) }
     }, resource);
 
+    this.stores[name] = store;
     this.definitions[name] = snapshot;
     this.collections.push(snapshot.routes.list);
 
+    this.routes.push({
+      path: snapshot.routes.view,
+      route: pathToRegexp(snapshot.routes.view),
+      resource: name
+    });
+
+    this.routes.push({
+      path: snapshot.routes.list,
+      route: pathToRegexp(snapshot.routes.list),
+      resource: name
+    });
+
+    if (this.settings.verbosity >= 4) console.log('[WEB:SERVER]', 'Routes:', this.routes);
     return this;
   }
 
@@ -121,7 +148,7 @@ class HTTPServer extends Fabric.Oracle {
     // TODO: check security of common defaults for `sec-websocket-key` params
     // Chrome?  Firefox?  Safari?  Opera?  What defaults do they use?
     let buffer = Buffer.from(request.headers['sec-websocket-key'], 'base64');
-    let player = new Fabric.State({
+    let player = new State({
       connection: buffer.toString('hex'),
       entropy: buffer.toString('hex')
     });
@@ -240,7 +267,7 @@ class HTTPServer extends Fabric.Oracle {
     });
   }
 
-  _logRequest (req, res, next) {
+  _logMiddleware (req, res, next) {
     if (!this.settings.verbose) return next();
     // TODO: switch to this.log
     console.log([
@@ -251,6 +278,11 @@ class HTTPServer extends Fabric.Oracle {
       res.statusCode,
       res.getHeader('content-length')
     ].join(' '));
+    return next();
+  }
+
+  _headerMiddleware (req, res, next) {
+    res.header('X-Powered-By', '@fabric/http');
     return next();
   }
 
@@ -274,28 +306,54 @@ class HTTPServer extends Fabric.Oracle {
     this.customRoutes.push({ method, path, handler });
   }
 
-  async _handleRoutableRequest (req, res, next) {
-    // TODO: check known resources
-    // if (~this.resouces.indexOf(req.path)) {
-    // ...
-    // }
+  _roleMiddleware (req, res, next) {
+    next();
+  }
 
-    switch (req.method) {
+  async _handleRoutableRequest (req, res, next) {
+    const server = this;
+    let result = null;
+
+    switch (req.method.toUpperCase()) {
+      // Discard unhandled methods
       default:
         return next();
+      case 'HEAD':
+        let existing = await this._GET(req.path);
+        if (!existing) return res.status(404).end();
+        break;
       case 'GET':
-        let mem = await this._GET(req.path);
-        if (!mem) return res.status(404).end();
-        return res.send(mem);
+        for (let i in this.routes) {
+          let route = this.routes[i];
+          if (req.path.match(route.route)) {
+            result = await this.stores[route.resource].get(route.path);
+            break;
+          }
+        }
+
+        let content = await this._GET(req.path);
+        result = content;
+        if (!result) return res.status(404).end();
+        break;
       case 'PUT':
-        let obj = await this._PUT(req.path, req.body);
-        return res.send(obj);
+        result = await this._PUT(req.path, req.body);
+        break;
       case 'POST':
-        let link = await this._POST(req.path, req.body);
+        for (let i in this.routes) {
+          let route = this.routes[i];
+          if (req.path.match(route.route)) {
+            result = await this.stores[route.resource].create(req.body);
+            break;
+          }
+        }
+
+        if (!result) return res.status(500).end();
+        let link = await this._POST(req.path, result);
         return res.redirect(303, link);
       case 'PATCH':
         let patch = await this._PATCH(req.path, req.body);
-        return res.send(patch);
+        result = patch;
+        break;
       case 'DELETE':
         await this._DELETE(req.path);
         return res.sendStatus(204);
@@ -305,6 +363,20 @@ class HTTPServer extends Fabric.Oracle {
           '@data': 'Not yet supported.'
         });
     }
+
+    res.format({
+      json: function () {
+        res.header('Content-Type', 'application/json');
+        return res.send(result);
+      },
+      html: function () {
+        // let output = server.app._loadHTML(resource.render(result));
+        // TODO: re-enable for HTML
+        // res.send(server.app._renderWith(output));
+        res.header('Content-Type', 'application/json');
+        return res.send(result);
+      }
+    });
   }
 
   async start () {
@@ -315,7 +387,7 @@ class HTTPServer extends Fabric.Oracle {
     for (let name in server.settings.resources) {
       const definition = server.settings.resources[name];
       const resource = await server.define(name, definition);
-      // console.log('[AUDIT]', 'Created resource:', resource);
+      if (server.settings.verbosity >= 5) console.log('[AUDIT]', 'Created resource:', resource);
     }
 
     try {
@@ -325,54 +397,28 @@ class HTTPServer extends Fabric.Oracle {
     }
 
     // configure router
+    server.express.use(server._logMiddleware.bind(server));
+    server.express.use(server._headerMiddleware.bind(server));
+
     // TODO: defer to an in-memory datastore for requested files
     // NOTE: disable this line to compile on-the-fly
     server.express.use(express.static('assets'));
+    server.express.use(extractor());
+    server.express.use(server._roleMiddleware.bind(server));
 
     // configure sessions & parsers
-    server.express.use(server.sessions);
+    // TODO: migrate to {@link Session} or abolish entirely
+    if (server.settings.sessions) server.express.use(server.sessions);
+
+    // Other Middlewares
     server.express.use(parsers.urlencoded({ extended: true }));
     server.express.use(parsers.json());
-    server.express.use(server._logRequest.bind(server));
 
     // TODO: render page
     server.express.options('/', server._handleOptionsRequest.bind(server));
     // TODO: enable this route by disabling or moving the static asset handler above
     // NOTE: see `server.express.use(express.static('assets'));`
     server.express.get('/', server._handleIndexRequest.bind(server));
-
-    // TODO: consolidate into earlier loop
-    // NOTE: reconcile this against tests...
-    for (let name in server.settings.resources) {
-      const def = server.settings.resources[name];
-      const resource = new Fabric.Resource(def);
-
-      // TODO: re-bind this
-      server._addRoute('GET', `${resource.routes.view}`, function (req, res, next) {
-        res.format({
-          json: function () {
-            return next();
-          },
-          html: function () {
-            let output = server.app._loadHTML(resource.render());
-            return server.app._renderWith(output);
-          }
-        });
-      });
-
-      // TODO: re-bind this
-      server._addRoute('GET', `${resource.routes.list}`, function (req, res, next) {
-        res.format({
-          json: function () {
-            return next();
-          },
-          html: function () {
-            let output = server.app._loadHTML(resource.render());
-            return server.app._renderWith(output);
-          }
-        });
-      });
-    }
 
     // handle custom routes.
     // TODO: abolish this garbage in favor of resources.
@@ -420,18 +466,9 @@ class HTTPServer extends Fabric.Oracle {
 
     this.emit('ready');
 
-    // inform the user
-    if (this.settings.verbose) {
-      let address = server.http.address();
-      console.log('address:', address);
-      if (!address) console.error('could not get address:', server.http);
-      let link = `http://${address.address}:${address.port}`;
-      console.log('[FABRIC:WEB]', 'Started!', `Now listening on ${link} ⇐ live URL`);
-      // TODO: include somewhere
-      // console.log('[FABRIC:WEB]', 'You should consider changing the `host` property in your config,');
-      // console.log('[FABRIC:WEB]', 'or set up a TLS server to encrypt traffic to and from this node.');
-    }
-
+    // TODO: include somewhere
+    // console.log('[FABRIC:WEB]', 'You should consider changing the `host` property in your config,');
+    // console.log('[FABRIC:WEB]', 'or set up a TLS server to encrypt traffic to and from this node.');
     if (this.settings.verbosity >= 4) console.log('[HTTP:SERVER]', 'Started!');
 
     return server;
@@ -470,7 +507,9 @@ class HTTPServer extends Fabric.Oracle {
   }
 
   async _PUT (path, data) {
-    return this.app.store._PUT(path, data);
+    if (this.settings.verbosity >= 4) console.log('[HTTP:SERVER]', 'Handling PUT to', path, data);
+    let result = await this.app.store._PUT(path, data);
+    return result;
   }
 
   async _POST (path, data) {

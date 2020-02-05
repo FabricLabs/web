@@ -4,21 +4,21 @@ const Component = require('../types/component');
 const Collection = require('./collection');
 const Resource = require('@fabric/core/types/resource');
 
-class ResourceList extends Component {
+class ResourceView extends Component {
   constructor (settings = {}) {
     super(settings);
 
     this.settings = Object.assign({
-      handle: 'fabric-resource-list',
-      path: '/resources'
+      handle: 'fabric-resource-view',
+      path: '/resources/:id'
     }, settings);
 
     return this;
   }
 
   _getInnerHTML () {
-    return `<strong>Resource list here...`;
+    return `<strong>Resource view here...`;
   }
 }
 
-module.exports = ResourceList;
+module.exports = ResourceView;

@@ -1,14 +1,16 @@
 'use strict';
 
-const Fabric = require('@fabric/core');
 const pluralize = require('pluralize');
-const pathToRegExp = require('path-to-regexp');
+const { pathToRegexp, match, parse, compile } = require('path-to-regexp');
+
+const Entity = require('@fabric/core/types/entity');
+const Service = require('@fabric/core/types/service');
 
 /**
  * Simple router.
  * @type {Object}
  */
-class Router extends Fabric.Service {
+class Router extends Service {
   /**
    * Builds a new {@link Router}.
    * @param  {Object} [settings={}] Configuration for the router.
@@ -61,7 +63,7 @@ class Router extends Fabric.Service {
   _addRoute (route, component) {
     this.routes[component] = {
       path: route,
-      regex: pathToRegExp(route)
+      regex: pathToRegexp(route)
     };
     // this.router.use(route.path, this._handleRoutableRequest.bind(this));
     return this.routes[route.name];
@@ -105,7 +107,7 @@ class Router extends Fabric.Service {
     this.status = 'starting';
 
     for (let name in this.routes) {
-      let route = new Fabric.Entity(this.routes[name].path);
+      let route = new Entity(this.routes[name].path);
       this.state.channels[route.id] = Object.assign({
         path: this.routes[name].path,
         members: [],

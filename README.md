@@ -1,4 +1,10 @@
 # `@fabric/http`
+![Project Status](https://img.shields.io/badge/status-experimental-rainbow.svg?style=flat-square)
+[![Build Status](https://img.shields.io/travis/FabricLabs/web.svg?branch=master&style=flat-square)](https://travis-ci.org/FabricLabs/web)
+[![Coverage Status](https://img.shields.io/codecov/c/github/FabricLabs/web.svg?style=flat-square)](https://codecov.io/gh/FabricLabs/web)
+[![GitHub contributors](https://img.shields.io/github/contributors/FabricLabs/web.svg?style=flat-square)](https://github.com/FabricLabs/web/graphs/contributors)
+[![Community](https://img.shields.io/matrix/hub:fabric.pub.svg?style=flat-square)](https://chat.fabric.pub)
+
 Fabric module for serving the legacy web.
 
 ## Quick Start

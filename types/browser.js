@@ -18,6 +18,7 @@ const BrowserContent = require('../components/browser-content');
 const Introduction = require('../components/introduction');
 // const Sidebar = require('../components/sidebar');
 const SearchBox = require('../components/search-box');
+const Welcome = require('../components/welcome');
 
 class Browser extends Fabric.Service {
   constructor (settings = {}) {
@@ -30,6 +31,7 @@ class Browser extends Fabric.Service {
       height: 480,
       depth: 5,
       handle: 'fabric-browser',
+      title: 'Browser',
       controls: false,
       components: {
         index: 'fabric-introduction'
@@ -55,6 +57,15 @@ class Browser extends Fabric.Service {
       let definition = this.settings.resources[name];
       let plural = pluralize(name);
 
+      if (!definition.components) definition.components = {};
+      if (!definition.components.view) definition.components.view = 'fabric-resource-view';
+      if (!definition.components.list) definition.components.list = 'fabric-resource-list';
+
+      if (!definition.routes) definition.routes = {};
+      if (!definition.routes.view) definition.routes.view = `/${plural.toLowerCase()}/:id`;
+      if (!definition.routes.list) definition.routes.list = `/${plural.toLowerCase()}`;
+
+      // TODO: allow `components` property to be unset
       // this.router._addFlat(`/${plural.toLowerCase()}`, definition);
       this.router._addRoute(`/${plural.toLowerCase()}/:id`, definition.components.view);
       this.router._addRoute(`/${plural.toLowerCase()}`, definition.components.list);
@@ -62,6 +73,7 @@ class Browser extends Fabric.Service {
     }
 
     this.router._addRoute(`/`, this.settings.components.index);
+    this._state = (typeof window !== 'undefined' && window.app) ? window.app.state : {};
 
     return this;
   }
@@ -108,7 +120,8 @@ class Browser extends Fabric.Service {
   }
 
   _flush () {
-    if (!this.target) return true;
+    if (!this.target) this.target = document.querySelector(BROWSER_TARGET);
+    if (!this.target) return false;
 
     while (this.target.firstChild) {
       this.target.removeChild(this.target.firstChild);
@@ -139,11 +152,13 @@ class Browser extends Fabric.Service {
   }
 
   _setElement (element) {
-    console.log('[FABRIC:BROWSER]', 'setting element:', element);
-
+    if (this.settings.verbosity >= 4) console.log('[FABRIC:BROWSER]', 'setting element:', element);
     this._flush();
     this._appendElement(element);
+    this._setTitle(this.settings.title);
+    element._redraw(this.state);
 
+    // TODO: initialize element?
     return this;
   }
 
@@ -152,8 +167,9 @@ class Browser extends Fabric.Service {
     document.querySelector('title').innerHTML = this.title;
   }
 
-  _getInnerHTML () {
-    let content = new BrowserContent(this.state);
+  _getInnerHTML (state) {
+    if (!state) state = (typeof window !== 'undefined' && window.app) ? window.app.state : this.state;
+    let content = new BrowserContent(state);
     // let sidebar = new Sidebar(this.sidebar.state);
     let html = `<fabric-grid rows="3" columns="3">`;
 
@@ -179,7 +195,7 @@ class Browser extends Fabric.Service {
     html += `<div class="ui grid">`;
 
     // first column, the content
-    html += `<div class="twelve wide column">`;
+    html += `<div class="${(this.settings.sidebar) ? 'twelve' : 'sixteen'} wide column">`;
     // html += `<fabric-browser-content id="browser-content">dummy content... ${JSON.stringify(this.router.route(this.address).route)}</fabric-browser-content>`;
     html += `<div class="browser">`;
     html += `${content.render()}`;
@@ -187,10 +203,12 @@ class Browser extends Fabric.Service {
     html += `</div>`;
 
     // second column, the sidebar
-    html += `<div class="four wide column">`;
-    // html += `${sidebar.render()}`;
-    html += `<span>sidebar would be here</span>`;
-    html += `</div>`;
+    if (this.settings.sidebar) {
+      html += `<div class="four wide column">`;
+      // html += `${sidebar.render()}`;
+      html += `<span>sidebar would be here</span>`;
+      html += `</div>`;
+    }
 
     // end of grid
     html += `</div>`;
