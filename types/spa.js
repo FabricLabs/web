@@ -84,7 +84,7 @@ class SPA extends App {
 
   define (name, definition) {
     let route = this.router.define(name, definition);
-    if (this.settings.verbosity >= 4) console.log('[WEB:SPA]', 'Defining', name, route);
+    if (this.settings.verbosity >= 5) console.log('[WEB:SPA]', 'Defining', name, route);
     this.types.state[name] = definition;
     this.resources[name] = definition;
     return this.resources[name];

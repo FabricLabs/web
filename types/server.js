@@ -54,6 +54,7 @@ class HTTPServer extends Oracle {
       host: '0.0.0.0',
       path: './stores/server',
       port: HTTP_SERVER_PORT,
+      listen: true,
       resources: {},
       components: {},
       services: {},
@@ -313,6 +314,8 @@ class HTTPServer extends Oracle {
   async _handleRoutableRequest (req, res, next) {
     const server = this;
     let result = null;
+    let route = null;
+    let resource = null;
 
     switch (req.method.toUpperCase()) {
       // Discard unhandled methods
@@ -324,12 +327,16 @@ class HTTPServer extends Oracle {
         break;
       case 'GET':
         for (let i in this.routes) {
-          let route = this.routes[i];
-          if (req.path.match(route.route)) {
-            result = await this.stores[route.resource].get(route.path);
+          let local = this.routes[i];
+          if (req.path.match(local.route)) {
+            result = await this.stores[local.resource].get(req.path);
+            route = local;
+            resource = local.resource;
             break;
           }
         }
+
+        if (result) break;
 
         let content = await this._GET(req.path);
         result = content;
@@ -340,9 +347,11 @@ class HTTPServer extends Oracle {
         break;
       case 'POST':
         for (let i in this.routes) {
-          let route = this.routes[i];
-          if (req.path.match(route.route)) {
-            result = await this.stores[route.resource].create(req.body);
+          let local = this.routes[i];
+          if (req.path.match(local.route)) {
+            result = await this.stores[local.resource].create(req.body);
+            route = local;
+            resource = local.resource;
             break;
           }
         }
@@ -456,8 +465,12 @@ class HTTPServer extends Oracle {
     // set up the WebSocket connection handler
     this.wss.on('connection', this._handleWebSocket.bind(this));
 
+    if (this.settings.listen) {
     // TODO: test?
-    await server.http.listen(this.settings.port, this.settings.host);
+      await server.http.listen(this.settings.port, this.settings.host);
+    } else {
+      console.warn('[HTTP:SERVER]', 'Listening is disabled.  Only events will be emitted!');
+    }
 
     this.status = 'started';
 

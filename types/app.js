@@ -216,10 +216,13 @@ class App extends Component {
   _defineElement (handle, definition) {
     this.components[handle] = definition;
 
-    try {
-      customElements.define(handle, definition);
-    } catch (E) {
-      console.error('[MAKI:APP]', 'Could not define Custom Element:', E, handle, definition);
+    // TODO: custom elements polyfill
+    if (typeof customElements !== 'undefined') {
+      try {
+        customElements.define(handle, definition);
+      } catch (E) {
+        console.error('[MAKI:APP]', 'Could not define Custom Element:', E, handle, definition);
+      }
     }
   }
 
