@@ -1,0 +1,113 @@
+./types/component.js:    // TODO: cache and skip
+./types/component.js:    // TODO: cache and skip
+./types/component.js:      // TODO: use Fabric.Remote
+./types/component.js:      // TODO: unbind old handlers
+./types/component.js:    // TODO: render Template here
+./types/component.js.bak:    // TODO: cache and skip
+./types/component.js.bak:    // TODO: cache and skip
+./types/component.js.bak:    // TODO: render Template here
+./types/component.js.bak:      // TODO: unbind old handlers
+./types/swarm.js:// TODO: investigate peerjs history, why .default now?  Node 10?
+./types/swarm.js:    // TODO: validation
+./types/hub.js:// TODO: remove express
+./types/hub.js:    // TODO: message handler on base class
+./types/hub.js:      // TODO: use Fabric implementation
+./types/hub.js:      // TODO: use Fabric implementation
+./types/hub.js:      // TODO: enable client verification
+./types/hub.js:          // TODO: reject unknown (!info.req.session.identity)
+./types/server.js:// TODO: remove Express entirely...
+./types/server.js:// TODO: check with Riddle about this
+./types/server.js:      // TODO: document host as listening on all interfaces by default
+./types/server.js:      // TODO: replace with crypto random
+./types/server.js:    // TODO: define parent path
+./types/server.js:          // TODO: double-check this
+./types/server.js:    // TODO: document pathing
+./types/server.js:    // TODO: check security of common defaults for `sec-websocket-key` params
+./types/server.js:        // TODO: refactor _sendTo to accept Message type
+./types/server.js:    // TODO: message handler on base class
+./types/server.js:          // TODO: disconnect from peer
+./types/server.js:      // TODO: enable relays
+./types/server.js:    // TODO: switch to this.log
+./types/server.js:      // TODO: reject unknown (!info.req.session.identity)
+./types/server.js:        // TODO: re-enable for HTML
+./types/server.js:        // TODO: re-write above code, render app with data
+./types/server.js:    // TODO: defer to an in-memory datastore for requested files
+./types/server.js:    // TODO: migrate to {@link Session} or abolish entirely 
+./types/server.js:    // TODO: render page
+./types/server.js:    // TODO: enable this route by disabling or moving the static asset handler above
+./types/server.js:    // TODO: abolish this garbage in favor of resources.
+./types/server.js:      // TODO: validate entire verification chain
+./types/server.js:    // TODO: convert to bound functions
+./types/server.js:    // TODO: include somewhere
+./types/app.js:// TODO: move component imports to components/ or scripts/
+./types/app.js:    // TODO: define these elsewhere!
+./types/app.js:    // TODO: expose this as the Library, namespace `alexandria`
+./types/app.js:    // TODO: return current page
+./types/app.js:    // TODO: custom elements polyfill
+./types/app.js:    // TODO: async generation
+./types/app.js:    // TODO: verify login here
+./types/app.js:    // TODO: encrypt local storage with password
+./types/app.js:    // TODO: remove public key from character, use only address (or direct hash)
+./types/app.js:    // TODO: enable multi-view composition?
+./types/app.js:  // TODO: write Purity-based version, use in production
+./types/app.js:      <!-- TODO: rollup semantic into build process -->
+./types/app.js:    // TODO: implement fullscreen from RPG
+./types/app.js:        // TODO: move this to `types/resource.js`
+./types/spa.js:      // TODO: enable by default?
+./types/spa.js:      secure: false, // TODO: default to secure (i.e., TLS on all connections)
+./types/spa.js:    // TODO: enable Web Worker integration
+./types/spa.js:  // TODO: reconcile with super(), document use of constructor vs. CustomElements
+./types/spa.js:    // TODO: check for async compatibility in HTTP.App
+./types/spa.js:    // TODO: reconcile with server.define
+./types/spa.js:  // TODO: document this vs. @fabric/core/types/app
+./types/spa.js:    // TODO: custom elements polyfill
+./types/spa.js:    // TODO: enable multi-view composition?
+./types/spa.js:    // TODO: move CSS to inline from webpack
+./types/spa.js:    // TODO: define Custom Element
+./types/spa.js:      // TODO: consider async _defineElement (define at `function _defineElement`)
+./types/app.old.js:// TODO: move component imports to components/ or scripts/
+./types/app.old.js:    // TODO: expose this as the Library, namespace `alexandria`
+./types/app.old.js:    // TODO: async generation
+./types/app.old.js:    // TODO: verify login here
+./types/app.old.js:    // TODO: encrypt local storage with password
+./types/app.old.js:    // TODO: remove public key from character, use only address (or direct hash)
+./types/app.old.js:  // TODO: write Purity-based version, use in production
+./types/app.old.js:  <!-- TODO: rollup semantic into build process -->
+./types/app.old.js:    // TODO: implement fullscreen from RPG
+./types/app.old.js:        // TODO: move this to `types/resource.js`
+./types/app.old.js:      // TODO: fix with webpack/maki
+./types/client.js:    // TODO: remove import requirement, use local definition
+./types/bridge.js:// TODO: audit this library
+./types/bridge.js:    // TODO: document significance of `/` as the document
+./types/bridge.js:    // TODO: secure
+./types/bridge.js:    // TODO: reconsider inheriting from Service
+./types/bridge.js:    // TODO: binary parsing
+./types/browser.js:// TODO: move to @fabric/core/types/service
+./types/browser.js:// TODO: describe constants in README or equivalent
+./types/browser.js:    // TODO: move to @fabric/core/types/service
+./types/browser.js:    // TODO: move to @fabric/core/types/service
+./types/browser.js:      // TODO: allow `components` property to be unset
+./types/browser.js:    // TODO: initialize element?
+./components/deposit-form.js:    console.log('TODO: prepare data, submit');
+./components/component.js:      // TODO: use Fabric.Remote
+./components/component.js:    // TODO: cache and skip
+./components/content-page.js:// TODO: rename file to page.js?
+./components/channel-list.js:        content: '<fabric-channel-creator></fabric-channel-creator>' // TODO: consider render pathway
+./components/channel-list.js:    // TODO: remove this monstrosity
+./components/table.js:    // TODO: implement
+./components/wallet.js:    // TODO: migrate this from scripts/rpg.js
+./components/modal.js:    // TODO: call child method
+./components/modal.js:    console.log('TODO: submit modal form here', event, event.target, this);
+./components/wallet-list.js:        content: '<fabric-wallet-creator></fabric-wallet-creator>' // TODO: consider render pathway
+./components/wallet-list.js:    // TODO: remove this monstrosity
+./components/application.js:            // TODO: deduct funds from channel
+./components/application.js:      // TODO: enable message handler for production
+./components/application.js:      // TODO: fix with webpack/maki
+./scripts/build.js:  // TODO: why isn't SPA exiting?
+./scripts/index.js:// TODO: switch core to types
+./scripts/index.js:  // TODO: fix verification
+./scripts/index.js:  // TODO: move these into App
+./tests/web.client.js:      // TODO: define 404 behavior
+./tests/web.client.js:      // TODO: define 404 behavior
+./package.json:    "review:todo": "grep --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=assets --exclude-dir=reports --exclude-dir=coverage --exclude-dir=docs -rEI \"TODO|FIXME\" . 2>/dev/null > reports/todo.txt",
+./examples/build.js:  // TODO: why isn't SPA exiting?

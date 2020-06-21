@@ -35,7 +35,7 @@
   },
   "homepage": "https://github.com/FabricLabs/web#readme",
   "dependencies": {
-    "@fabric/core": "FabricLabs/fabric#peering",
+    "@fabric/core": "FabricLabs/fabric#peering-develop-async",
     "bcoin": "FabricLabs/bcoin#optional-http",
     "body-parser": "^1.18.3",
     "canvas": "^2.5.0",
@@ -44,6 +44,7 @@
     "express": "^4.16.4",
     "express-bearer-token": "^2.4.0",
     "express-session": "^1.15.6",
+    "isomorphic-ws": "^4.0.1",
     "jade-lexer": "0.0.9",
     "jade-parser": "0.0.9",
     "jquery": "^3.4.1",
@@ -62,6 +63,7 @@
   },
   "devDependencies": {
     "codecov": "^3.2.0",
+    "debug-trace": "^2.2.3",
     "ecstatic": "^3.3.1",
     "gulp": "^4.0.2",
     "mocha": "^6.0.2",
@@ -71,6 +73,9 @@
     "webpack-assets-manifest": "^3.1.1",
     "webpack-cli": "^3.3.2",
     "webpack-dev-middleware": "^3.7.0"
+  },
+  "browser": {
+    "ws": false
   },
   "nyc": {
     "report-dir": "./reports/coverage",

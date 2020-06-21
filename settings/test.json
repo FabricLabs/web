@@ -1,0 +1,20 @@
+{
+  "authority": "localhost",
+  "verbosity": 2,
+  "resources": {
+    "Example": {
+      "name": "Example",
+      "components": {
+        "list": "example-list",
+        "view": "example-view"
+      },
+      "routes": {
+        "list": "/examples",
+        "view": "/examples/:id"
+      }
+    }
+  },
+  "persistent": true,
+  "secure": false,
+  "port": 9999
+}

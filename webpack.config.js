@@ -5,7 +5,7 @@ const path = require('path');
 
 // Plugins
 const WebpackAssetsManifest = require('webpack-assets-manifest');
-const ServiceWorkerWebpackPlugin = require('serviceworker-webpack-plugin');
+// const ServiceWorkerWebpackPlugin = require('serviceworker-webpack-plugin');
 
 module.exports = {
   mode: 'development',
@@ -30,9 +30,9 @@ module.exports = {
       output: '../assets/manifest.json',
       merge: true
     }),
-    new ServiceWorkerWebpackPlugin({
+    /* new ServiceWorkerWebpackPlugin({
       entry: path.join(__dirname, 'scripts/worker.js'),
       filename: '../worker.js'
-    })
+    }) */
   ]
 };
