@@ -12,6 +12,10 @@ const HTTP_SERVER_PORT = 9999;
 const HTTPS_CLIENT_PORT = 443;
 const HTTPS_SERVER_PORT = 19999;
 
+// websockets
+const MAXIMUM_PING = 10000;
+const WEBSOCKET_KEEPALIVE = 600000; // 10 minutes
+
 // browser / dom
 const BROWSER_TARGET = '#browser-content';
 
@@ -23,5 +27,7 @@ module.exports = {
   HTTP_SERVER_PORT,
   HTTPS_CLIENT_PORT,
   HTTPS_SERVER_PORT,
+  MAXIMUM_PING,
+  WEBSOCKET_KEEPALIVE,
   BROWSER_TARGET
 };

@@ -4,6 +4,7 @@ const Fabric = require('@fabric/core');
 const FabricElement = require('../types/element');
 
 const crypto = require('crypto');
+const manager = require('fast-json-patch');
 const pointer = require('json-pointer');
 
 /**
@@ -27,6 +28,8 @@ class Component extends FabricElement {
     // this.element = document.createElement(this.settings.handle);
     // this.fabric = new Fabric();
     this._boundFunctions = {};
+    this._listeners = {};
+
     this.remote = new Fabric.Remote({
       host: window.host,
       port: window.port
@@ -210,6 +213,17 @@ class Component extends FabricElement {
 
   async _SET (path, value) {
     return pointer.set(this.state, path, value);
+  }
+
+  async _applyChanges (ops) {
+    try {
+      monitor.applyPatch(this.state, ops);
+      await this.commit();
+    } catch (E) {
+      console.error('Error applying changes:', E);
+    }
+
+    return this;
   }
 }
 

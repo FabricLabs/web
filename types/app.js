@@ -78,13 +78,16 @@ class App extends Component {
       path: './stores/fabric-browser'
     }));
 
-    this.state = {
+    // TODO: define these elsewhere!
+    // These are internal components, should be on prototype.
+    /* this.state = {
       methods: {},
       channels: {},
       components: {},
       resources: {},
       messages: {}
-    };
+    }; */
+    this._state = {};
 
     this.modal = null;
     this.target = null;
@@ -167,6 +170,14 @@ class App extends Component {
     });
   }
 
+  get state () {
+    return this._state;
+  }
+
+  set state (value) {
+    return this._state = value;
+  }
+
   get version () {
     return this.settings.version;
   }
@@ -180,7 +191,7 @@ class App extends Component {
     if (this.settings.verbosity >= 4) console.log('[WEB:APP]', 'Defining', name, route);
     this.types.state[name] = definition;
     this.resources[name] = definition;
-    this.state[pluralize(name).toLowerCase()] = definition.data || {};
+    this._state[pluralize(name).toLowerCase()] = definition.data || {};
   }
 
   dispatch (name, data = {}) {
@@ -216,10 +227,13 @@ class App extends Component {
   _defineElement (handle, definition) {
     this.components[handle] = definition;
 
-    try {
-      customElements.define(handle, definition);
-    } catch (E) {
-      console.error('[MAKI:APP]', 'Could not define Custom Element:', E, handle, definition);
+    // TODO: custom elements polyfill
+    if (typeof customElements !== 'undefined') {
+      try {
+        customElements.define(handle, definition);
+      } catch (E) {
+        console.error('[MAKI:APP]', 'Could not define Custom Element:', E, handle, definition);
+      }
     }
   }
 

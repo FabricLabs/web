@@ -108,11 +108,11 @@ class Router extends Service {
 
     for (let name in this.routes) {
       let route = new Entity(this.routes[name].path);
-      this.state.channels[route.id] = Object.assign({
+      /* this.state.channels[route.id] = Object.assign({
         path: this.routes[name].path,
         members: [],
         messages: []
-      });
+      }); */
     }
 
     this.status = 'started';

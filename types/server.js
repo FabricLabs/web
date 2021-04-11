@@ -2,12 +2,15 @@
 
 const {
   HTTP_SERVER_PORT,
-  HTTPS_SERVER_PORT
+  HTTPS_SERVER_PORT,
+  MAXIMUM_PING,
+  WEBSOCKET_KEEPALIVE
 } = require('../constants');
 
 // trusted community modules
 // const fs = require('fs');
 const http = require('http');
+const merge = require('lodash.merge');
 // const crypto = require('crypto');
 // TODO: remove Express entirely...
 // NOTE: current blockers include PeerServer...
@@ -15,6 +18,7 @@ const express = require('express');
 const session = require('express-session');
 // TODO: check with Riddle about this
 const parsers = require('body-parser');
+const monitor = require('fast-json-patch');
 const extractor = require('express-bearer-token');
 const pluralize = require('pluralize');
 const stoppable = require('stoppable');
@@ -26,10 +30,13 @@ const pathToRegexp = require('path-to-regexp').pathToRegexp;
 const Oracle = require('@fabric/core/types/oracle');
 const Collection = require('@fabric/core/types/collection');
 const Resource = require('@fabric/core/types/resource');
+const Message = require('@fabric/core/types/message');
+const Entity = require('@fabric/core/types/entity');
 const State = require('@fabric/core/types/state');
 // const App = require('./app');
 // const Client = require('./client');
 // const Component = require('./component');
+const Browser = require('./browser');
 const SPA = require('./spa');
 
 // Dependencies
@@ -43,29 +50,41 @@ const PeerServer = require('peer').ExpressPeerServer;
 class HTTPServer extends Oracle {
   /**
    * Create an instance of the HTTP server.
-   * @param  {Object} [settings={}] Configuration values.
+   * @param {Object} [settings] Configuration values.
+   * @param {String} [settings.name="FabricHTTPServer"] User-friendly name of this server.
+   * @param {Number} [settings.port=9999] Port to listen for HTTP connections on.
    * @return {HTTPServer} Fully-configured instance of the HTTP server.
    */
   constructor (settings = {}) {
     super(settings);
 
-    this.settings = Object.assign({
+    // Assign defaults
+    this.settings = merge({
       name: 'FabricHTTPServer',
+      description: 'Service delivering a Fabric application across the HTTP protocol.',
+      // TODO: document host as listening on all interfaces by default
       host: '0.0.0.0',
       path: './stores/server',
       port: HTTP_SERVER_PORT,
+      listen: true,
       resources: {},
       components: {},
-      services: {},
+      services: {
+        "audio": {
+          address: "/devices/audio"
+        }
+      },
+      // TODO: replace with crypto random
       seed: Math.random(),
-      sessions: false,
-      verbose: false
+      sessions: false
     }, settings);
 
     this.connections = {};
     this.definitions = {};
+    this.methods = {};
     this.stores = {};
 
+    this.browser = new Browser(this.settings);
     this.app = new SPA(Object.assign({}, this.settings, {
       path: './stores/server-application'
     }));
@@ -83,6 +102,8 @@ class HTTPServer extends Oracle {
       secret: this.settings.seed
     });
 
+    this._state = {};
+    this.observer = monitor.observe(this.state);
     this.coordinator = new PeerServer(this.express, {
       path: '/services/peering'
     });
@@ -94,6 +115,47 @@ class HTTPServer extends Oracle {
     return this;
   }
 
+  get state () {
+    return this._state;
+  }
+
+  set state (value) {
+    this._state = value;
+  }
+
+  async commit () {
+    ++this.clock;
+
+    this['@id'] = this.id;
+    // TODO: define parent path
+    // this['@parent'] = this.id;
+    // this['@preimage'] = this.toString();
+    this['@constructor'] = this.constructor;
+
+    if (this.observer) {
+      this['@changes'] = monitor.generate(this.observer);
+    }
+
+    if (this['@changes'] && this['@changes'].length) {
+      const message = {
+        '@type': 'Transaction',
+        '@data': {
+          'changes': this['@changes'],
+          'state': this.state
+        }
+      };
+
+      this.emit('changes', this['@changes']);
+      this.emit('state', this.state);
+      this.emit('message', message);
+
+      // Broadcast to connected peers
+      this.broadcast(message);
+    }
+
+    return this;
+  }
+
   /**
    * Define a {@link Type} by name.
    * @param  {String} name       Human-friendly name of the type.
@@ -101,17 +163,65 @@ class HTTPServer extends Oracle {
    * @return {HTTPServer}            Instance of the configured server.
    */
   async define (name, definition) {
-    if (this.settings.verbosity >= 4) console.log('[WEB:SERVER]', 'Defining:', name, definition);
+    if (this.settings.verbosity >= 5) console.log('[HTTP:SERVER]', 'Defining:', name, definition);
+    const server = this;
+    const resource = await super.define(name, definition);
 
-    let store = new Collection(definition);
-    let resource = await super.define(name, definition);
     let snapshot = Object.assign({
+      name: name,
       names: { plural: pluralize(name) }
     }, resource);
+
+    let address = snapshot.routes.list.split('/')[1];
+    let store = new Collection(snapshot);
+
+    if (this.settings.verbosity >= 6) console.log('[HTTP:SERVER]', 'Collection as store:', store);
+    if (this.settings.verbosity >= 6) console.log('[HTTP:SERVER]', 'Snapshot:', snapshot);
 
     this.stores[name] = store;
     this.definitions[name] = snapshot;
     this.collections.push(snapshot.routes.list);
+    this.keys.add(snapshot.routes.list);
+
+    this.stores[name].on('error', async (error) => {
+      console.error('[HTTP:SERVER]', '[ERROR]', error);
+    });
+
+    this.stores[name].on('warning', async (warning) => {
+      console.warn('[HTTP:SERVER]', 'Warning:', warning);
+    });
+
+    this.stores[name].on('message', async (message) => {
+      switch (message['@type']) {
+        default:
+          console.warn('[HTTP:SERVER]', 'Unhandled message type:', message['@type']);
+          break;
+        case 'Create':
+          let entity = new Entity({
+            '@type': name,
+            '@data': message['@data']
+          });
+
+          console.log('[HTTP:SERVER]', `Resource "${name}" created:`, entity.data);
+          server.emit('message', entity.data);
+          break;
+        case 'Transaction':
+          await server._applyChanges(message['@data'].changes);
+          break;
+      }
+
+      server.broadcast({
+        '@type': 'StateUpdate',
+        '@data': server.state
+      });
+    });
+
+    this.stores[name].on('commit', (commit) => {
+      server.broadcast({
+        '@type': 'StateUpdate',
+        '@data': server.state
+      });
+    });
 
     this.routes.push({
       path: snapshot.routes.view,
@@ -125,14 +235,47 @@ class HTTPServer extends Oracle {
       resource: name
     });
 
-    if (this.settings.verbosity >= 4) console.log('[WEB:SERVER]', 'Routes:', this.routes);
+    // Also define on app
+    await this.app.define(name, definition);
+
+    // TODO: document pathing
+    this.state[address] = {};
+    this.app.state[address] = {};
+
+    // if (this.settings.verbosity >= 4) console.log('[HTTP:SERVER]', 'Routes:', this.routes);
     return this;
+  }
+
+  broadcast (message) {
+    let peers = Object.keys(this.connections);
+    for (let i = 0; i < peers.length; i++) {
+      try {
+        this.connections[peers[i]].send(JSON.stringify(message));
+      } catch (E) {
+        console.error('Could not send message to peer:', E);
+      }
+    }
   }
 
   trust (source) {
     source.on('message', function (msg) {
-      console.log('[RPG:SERVER]', 'trusted source:', source.constructor.name, 'sent message:', msg);
+      console.log('[HTTP:SERVER]', 'trusted source:', source.constructor.name, 'sent message:', msg);
     });
+  }
+
+  _registerMethod (name, method) {
+    this.methods[name] = method.bind(this);
+  }
+
+  _handleAppMessage (msg) {
+    console.trace('[HTTP:SERVER]', 'Internal app emitted message:', msg);
+  }
+
+  _handleCall (call) {
+    if (!call.method) throw new Error('Call requires "method" parameter.');
+    if (!call.params) throw new Error('Call requires "params" parameter.');
+    if (!this.methods[call.method]) throw new Error(`Method "${call.method}" has not been registered.`);
+    this.methods[call.method].apply(this, call.params);
   }
 
   /**
@@ -148,58 +291,117 @@ class HTTPServer extends Oracle {
     // TODO: check security of common defaults for `sec-websocket-key` params
     // Chrome?  Firefox?  Safari?  Opera?  What defaults do they use?
     let buffer = Buffer.from(request.headers['sec-websocket-key'], 'base64');
+    let handle = buffer.toString('hex');
     let player = new State({
       connection: buffer.toString('hex'),
       entropy: buffer.toString('hex')
     });
 
+    socket._resetKeepAlive = function () {
+      clearInterval(socket._heartbeat);
+      socket._heartbeat = setInterval(function () {
+        let now = Date.now();
+        let message = Message.fromVector(['Ping', now.toString()]);
+        // TODO: refactor _sendTo to accept Message type
+        let ping = JSON.stringify(message.toObject());
+
+        try {
+          server._sendTo(handle, ping);
+        } catch (exception) {
+          console.error('could not ping peer:', handle, exception);
+        }
+      }, WEBSOCKET_KEEPALIVE);
+    };
+
+    socket._timeout = null;
+    socket._resetKeepAlive();
+
     // Clean up memory when the connection has been safely closed (ideal case).
     socket.on('close', function () {
+      clearInterval(socket._heartbeat);
       delete server.connections[player['@data'].connection];
     });
 
-    // TODO: set up heartbeat
-    // socket.heartbeat = setInterval([...]);
-
     // TODO: message handler on base class
     socket.on('message', async function handler (msg) {
-      console.log('websocket incoming message:', msg);
+      console.log('[SERVER:WEBSOCKET]', 'incoming message:', typeof msg, msg);
+
+      let message = null;
+      let type = null;
+
+      if (msg.type && msg.data) {
+        console.log('spec:', {
+          type: msg.type,
+          data: msg.data
+        });
+      }
+
+      try {
+        message = Message.fromRaw(msg);
+        type = message.type;
+      } catch (exception) {
+        console.error('could not parse message:', exception);
+      }
+
+      if (!message) {
+        // Fall back to JSON parsing
+        try {
+          if (msg instanceof Buffer) {
+            msg = msg.toString('utf8');
+          }
+
+          message = JSON.parse(msg);
+          type = message['@type'];
+        } catch (E) {
+          console.error('could not parse message:', typeof msg, msg, E);
+          // TODO: disconnect from peer
+          console.warn('you should disconnect from this peer:', handle);
+        }
+      }
+
+      switch (type) {
+        default:
+          console.log('[SERVER]', 'unhandled type:', type);
+          break;
+        case 'GET':
+          let answer = await server._GET(message['@data']['path']);
+          console.log('answer:', answer);
+          return answer;
+        case 'POST':
+          let link = await server._POST(message['@data']['path'], message['@data']['value']);
+          console.log('[SERVER]', 'posted link:', link);
+          break;
+        case 'PATCH':
+          let result = await server._PATCH(message['@data']['path'], message['@data']['value']);
+          console.log('[SERVER]', 'patched:', result);
+          break;
+        case 'Ping':
+          let now = Date.now();
+          let local = Message.fromVector(['Pong', now.toString()]);
+          let pong = JSON.stringify(local.toObject());
+          return server._sendTo(handle, pong);
+        case 'Pong':
+          socket._resetKeepAlive();
+          return;
+          break;
+        case 'Call':
+          server.emit('call', {
+            method: message['@data'].data.method,
+            params: message['@data'].data.params
+          });
+          break;
+      }
+
+      // TODO: enable relays
+      // server._relayFrom(handle, msg);
 
       // always send a receipt of acknowledgement
       socket.send(JSON.stringify({
         '@type': 'Receipt',
-        '@actor': buffer.toString('hex'),
-        '@data': msg,
+        '@actor': handle,
+        '@data': message,
         '@version': 1
       }));
-
-      try {
-        let message = JSON.parse(msg);
-        let type = message['@type'];
-
-        switch (type) {
-          default:
-            console.log('[SERVER]', 'unhandled type:', type);
-            break;
-          case 'GET':
-            let answer = await server._GET(message['@data']['path']);
-            console.log('answer:', answer);
-            return answer;
-          case 'POST':
-            let link = await server._POST(message['@data']['path'], message['@data']['value']);
-            console.log('[SERVER]', 'posted link:', link);
-            break;
-          case 'PATCH':
-            let result = await server._PATCH(message['@data']['path'], message['@data']['value']);
-            console.log('[SERVER]', 'patched:', result);
-            break;
-        }
-
-        server._relayFrom(buffer.toString('hex'), msg);
-      } catch (E) {
-        console.error('could not parse message:', E);
-        console.log('you should disconnect from this peer:', buffer.toString('hex'));
-      }
     });
 
     // set up an oracle, which listens to patches from server
@@ -219,17 +421,24 @@ class HTTPServer extends Oracle {
 
     socket.send(JSON.stringify({
       '@type': 'Inventory',
-      '@parent': this.app.id,
+      '@parent': server.app.id,
       '@version': 1
     }));
 
     socket.send(JSON.stringify({
       '@type': 'State',
-      '@data': this.app.state,
+      '@data': server.app.state,
       '@version': 1
     }));
 
     return socket;
+  }
+
+  _sendTo (actor, msg) {
+    console.log('[SERVER:WEBSOCKET]', 'sending message to actor', actor, msg);
+    let target = this.connections[actor];
+    if (!target) throw new Error('No such target.');
+    let result = target.send(msg);
   }
 
   _relayFrom (actor, msg) {
@@ -255,7 +464,7 @@ class HTTPServer extends Oracle {
    */
   _handleIndexRequest (req, res) {
     console.log('[HTTP:SERVER]', 'Handling request for Index...');
-    let html = this.app.render();
+    let html = this.app.render(this.state);
     console.log('[HTTP:SERVER]', 'Generated HTML:', html);
     res.set('Content-Type', 'text/html');
     res.send(`${html}`);
@@ -263,12 +472,14 @@ class HTTPServer extends Oracle {
 
   _handleOptionsRequest (req, res) {
     res.send({
+      name: this.settings.name,
+      description: this.settings.description,
       resources: this.definitions
     });
   }
 
   _logMiddleware (req, res, next) {
-    if (!this.settings.verbose) return next();
+    if (!this.settings.verbosity < 2) return next();
     // TODO: switch to this.log
     console.log([
       `${req.host}:${this.settings.port}`,
@@ -310,52 +521,84 @@ class HTTPServer extends Oracle {
     next();
   }
 
+  async _applyChanges (ops) {
+    try {
+      monitor.applyPatch(this.state, ops);
+      await this.commit();
+    } catch (E) {
+      this.error('Error applying changes:', E);
+    }
+
+    return this;
+  }
+
   async _handleRoutableRequest (req, res, next) {
+    if (this.settings.verbosity >= 5) console.log('[HTTP:SERVER]', 'Handling routable request:', req.method, req.path);
     const server = this;
+
+    // Prepare variables
     let result = null;
+    let route = null;
+    let resource = null;
+
+    for (let i in this.routes) {
+      let local = this.routes[i];
+      if (req.path.match(local.route)) {
+        route = local;
+        resource = local.resource;
+        break;
+      }
+    }
 
     switch (req.method.toUpperCase()) {
       // Discard unhandled methods
       default:
         return next();
       case 'HEAD':
-        let existing = await this._GET(req.path);
+        let existing = await server._GET(req.path);
         if (!existing) return res.status(404).end();
         break;
       case 'GET':
-        for (let i in this.routes) {
-          let route = this.routes[i];
-          if (req.path.match(route.route)) {
-            result = await this.stores[route.resource].get(route.path);
-            break;
+        if (resource) {
+          try {
+            result = await server.stores[resource].get(req.path);
+          } catch (exception) {
+            console.warn('[HTTP:SERVER]', 'Warning:', exception);
           }
         }
 
-        let content = await this._GET(req.path);
-        result = content;
-        if (!result) return res.status(404).end();
+        // TODO: re-optimize querying from memory (i.e., don't touch disk / restore)
+        // If a result was found, use it by breaking immediately
+        // if (result) break;
+
+        // No result found, call _GET locally
+        result = await server._GET(req.path);
+        // let content = await server.stores[resource].get(req.path);
         break;
       case 'PUT':
-        result = await this._PUT(req.path, req.body);
+        result = await server._PUT(req.path, req.body);
         break;
       case 'POST':
-        for (let i in this.routes) {
-          let route = this.routes[i];
-          if (req.path.match(route.route)) {
-            result = await this.stores[route.resource].create(req.body);
-            break;
-          }
+        if (resource) {
+          result = await server.stores[resource].create(req.body);
         }
 
         if (!result) return res.status(500).end();
-        let link = await this._POST(req.path, result);
+
+        // Call parent method (2 options)
+        // Option 1 (original): Assigns the direct result
+        // let link = await server._POST(req.path, result);
+        // Option 2 (testing): Assigns the raw body
+        let link = await server._POST(req.path, req.body);
+
+        // POST requests return a 303 header with a pointer to the object
         return res.redirect(303, link);
       case 'PATCH':
-        let patch = await this._PATCH(req.path, req.body);
+        let patch = await server._PATCH(req.path, req.body);
         result = patch;
         break;
       case 'DELETE':
-        await this._DELETE(req.path);
+        await server._DELETE(req.path);
         return res.sendStatus(204);
       case 'OPTIONS':
         return res.send({
@@ -364,15 +607,29 @@ class HTTPServer extends Oracle {
         });
     }
 
-    res.format({
+    // If no result found, return 404
+    if (!result) {
+      return res.status(404).send({
+        status: 'error',
+        message: 'Document not found.',
+        request: {
+          method: req.method.toUpperCase(),
+          path: req.path
+        }
+      });
+    }
+
+    return res.format({
       json: function () {
         res.header('Content-Type', 'application/json');
         return res.send(result);
       },
       html: function () {
-        // let output = server.app._loadHTML(resource.render(result));
         // TODO: re-enable for HTML
-        // res.send(server.app._renderWith(output));
+        // let output = server.app._loadHTML(resource.render(result));
+        // return res.send(server.app._renderWith(output));
+
+        // TODO: re-write above code, render app with data
         res.header('Content-Type', 'application/json');
         return res.send(result);
       }
@@ -384,16 +641,14 @@ class HTTPServer extends Oracle {
     const server = this;
     server.status = 'starting';
 
+    if (!server.settings.resources || !Object.keys(server.settings.resources).length) {
+      console.trace('[HTTP:SERVER]', 'No Resources have been defined for this server.  Please provide a "resources" map in the configuration.');
+    }
+
     for (let name in server.settings.resources) {
       const definition = server.settings.resources[name];
       const resource = await server.define(name, definition);
-      if (server.settings.verbosity >= 5) console.log('[AUDIT]', 'Created resource:', resource);
-    }
-
-    try {
-      await server.app.start();
-    } catch (E) {
-      console.error('Could not start server app:', E);
+      if (server.settings.verbosity >= 6) console.log('[AUDIT]', 'Created resource:', resource);
     }
 
     // configure router
@@ -447,24 +702,53 @@ class HTTPServer extends Oracle {
     server.http = stoppable(http.createServer(server.express), 0);
 
     // attach a WebSocket handler
-    this.wss = new WebSocket.Server({
+    server.wss = new WebSocket.Server({
       server: server.http,
       // TODO: validate entire verification chain
       // verifyClient: this._verifyClient.bind(this)
     });
 
     // set up the WebSocket connection handler
-    this.wss.on('connection', this._handleWebSocket.bind(this));
+    server.wss.on('connection', server._handleWebSocket.bind(server));
 
-    // TODO: test?
-    await server.http.listen(this.settings.port, this.settings.host);
+    // Handle messages from internal app
+    server.app.on('snapshot', server._handleAppMessage.bind(server));
+    server.app.on('message', server._handleAppMessage.bind(server));
+    server.app.on('commit', server._handleAppMessage.bind(server));
 
-    this.status = 'started';
+    // Handle interna call requests
+    server.on('call', server._handleCall.bind(server));
+
+    // TODO: convert to bound functions
+    server.on('commit', async function (msg) {
+      console.log('[HTTP:SERVER]', 'Internal commit:', msg);
+    });
+
+    server.on('message', async function (msg) {
+      console.log('[HTTP:SERVER]', 'Internal message:', msg);
+    });
+
+    try {
+      await server.app.start();
+    } catch (E) {
+      console.error('Could not start server app:', E);
+    }
+
+    if (this.settings.listen) {
+      server.http.on('listening', notifyReady);
+      await server.http.listen(this.settings.port, this.settings.host);
+    } else {
+      console.warn('[HTTP:SERVER]', 'Listening is disabled.  Only events will be emitted!');
+      notifyReady();
+    }
+
+    function notifyReady () {
+      server.status = 'started';
+      server.emit('ready');
+    }
 
     // commit to our results
     // await this.commit();
-
-    this.emit('ready');
 
     // TODO: include somewhere
     // console.log('[FABRIC:WEB]', 'You should consider changing the `host` property in your config,');
@@ -472,6 +756,19 @@ class HTTPServer extends Oracle {
     if (this.settings.verbosity >= 4) console.log('[HTTP:SERVER]', 'Started!');
 
     return server;
+  }
+
+  async flush () {
+    // console.log('[HTTP:SERVER]', 'flush requested:', this.keys);
+
+    for (let item of this.keys) {
+      // console.log('...flushing:', item);
+      try {
+        await this._DELETE(item);
+      } catch (E) {
+        console.error(E);
+      }
+    }
   }
 
   async stop () {
@@ -509,12 +806,14 @@ class HTTPServer extends Oracle {
   async _PUT (path, data) {
     if (this.settings.verbosity >= 4) console.log('[HTTP:SERVER]', 'Handling PUT to', path, data);
     let result = await this.app.store._PUT(path, data);
+    if (!result) console.log('wat...........');
     return result;
   }
 
   async _POST (path, data) {
-    if (this.settings.verbosity >= 4) console.log('[HTTP:SERVER]', 'Handling POST to', path, data);
-    return this.app.store._POST(path, data);
+    if (this.settings.verbosity >= 4) console.trace('[HTTP:SERVER]', 'Handling POST to', path, data);
+    let result = await this.app.store._POST(path, data);
+    return result;
   }
 
   async _PATCH (path, data) {
@@ -524,7 +823,7 @@ class HTTPServer extends Oracle {
 
   async _DELETE (path) {
     if (this.settings.verbosity >= 4) console.log('[HTTP:SERVER]', 'Handling DELETE to', path);
-    return this.app.store._DELETE(path, data);
+    return this.app.store._DELETE(path);
   }
 }
 

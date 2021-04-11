@@ -1,0 +1,5 @@
+{
+  "name": "@fabric/http",
+  "description": "HTTP interface for Fabric programs.",
+  "verbosity": 2
+}

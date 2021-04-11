@@ -113,9 +113,9 @@ class Browser extends Fabric.Service {
   }
 
   _redraw () {
-    console.log('[FABRIC:BROWSER]', `redrawing ${this.address} with state:`, this.state);
+    if (this.settings.verbosity >= 4) console.log('[FABRIC:BROWSER]', `redrawing ${this.address} with state:`, this.state);
     this.innerHTML = this._getInnerHTML(this.state);
-    console.log('this innerHTML', this.innerHTML);
+    if (this.settings.verbosity >= 5) console.log('[FABRIC:BROWSER]', 'this innerHTML', this.innerHTML);
     return this;
   }
 

@@ -24,6 +24,10 @@ class Component extends Service {
     this.state = settings;
     this.element = null;
 
+    // Healthy Cleanup
+    this._boundFunctions = {};
+    this._listeners = {};
+
     return this;
   }
 
@@ -46,14 +50,13 @@ class Component extends Service {
     return `sha256-${hash}`;
   }
 
-
   attributeChangedCallback (name, old, value) {
     console.log('[MAKI:COMPONENT]', 'Component notified a change:', name, 'changed to:', value, `(was ${old})`);
   }
 
   connectedCallback () {
     console.log('[MAKI:COMPONENT]', 'Component added to page:', this);
-    let html = this._getInnerHTML();
+    let html = this._getInnerHTML(this.state);
 
     this.setAttribute('data-integrity', Fabric.sha256(html));
     this.setAttribute('data-fingerprint', this.fingerprint);
@@ -80,7 +83,10 @@ class Component extends Service {
 
   disconnectedCallback () {
     console.log('[MAKI:COMPONENT]', 'Component removed from page:', this);
-    // TODO: remove event listeners, close connections, etc.
+
+    for (let name in this._boundFunctions) {
+      this.removeEventListener('message', this._boundFunctions[name]);
+    }
   }
 
   _bind (element) {
